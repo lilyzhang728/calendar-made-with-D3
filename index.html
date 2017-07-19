@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>D3绘制日历</title>
+	<style type="text/css">
+	.tooltip{  
+		position: absolute;  
+		width: 120;  
+		height: auto;  
+		font-family: simsun;  
+		font-size: 14px;  
+		text-align: center;  
+		border-style: solid;   
+		border-width: 1px;  
+		background-color: white;  
+		border-radius: 5px;  
+	}  
+	.month {
+	    fill: none;
+	    stroke:#000;
+	    stroke-width:2px;
+	}
+	</style>
+	<script type="text/javascript" src="js/d3.js"></script>
+	<script type="text/javascript" src="js/colorbrewer_schemes.js"></script>
+</head>
+<body>
+	
+	<script type="text/javascript">
+		var svg=d3.select("body")
+			.append("svg")
+			.attr("width","920px")
+			.attr("height","145px");
+
+		var cell_size = 17;
+		
+
+		//设置日期格式
+		var date_format = d3.time.format("%Y-%m-%d");
+        var y_format = d3.time.format("%w");
+
+        //日期数据
+		var data=[];
+		var data = [
+		    {date:'2016-10-01',value:0},
+		    {date:'2016-10-02',value:0},
+		    {date:'2016-10-03',value:0},
+		    {date:'2016-10-04',value:1},
+		    {date:'2016-10-05',value:0},
+		    {date:'2016-10-06',value:0},
+		    {date:'2016-10-07',value:5}
+		];
+		var end_date=new Date();
+		var start_date=new Date();
+		start_date.setFullYear(end_date.getFullYear()-1);
+		start_date=d3.time.week(start_date);
+		//生成日期序列
+		var date_range=d3.time.days(start_date,end_date);
+
+		//把过去一年的日期按格式转换好，并设置键值对，默认值为-1
+		var date_value_map=d3.map();
+		date_range.forEach(function(element,index,array){
+			date_value_map.set(date_format(element),-1);
+		})
+		
+		//把新数据更新到日历值中
+		data.forEach(function(element,index,array){
+			date_value_map.set(element.date,element.value)
+		})
+
+		var date_value=[];
+		date_value_map.forEach(function(key,value){
+			date_value.push({
+				date:date_format.parse(key),value:value
+			});	
+		})
+		
+		//最后的输入数据
+		var calendarData={
+			date_value:date_value,
+			start_date:start_date,
+			end_date:end_date
+		}
+
+		//设置横坐标
+		var week_range=d3.time.weeks(d3.time.week(start_date),end_date);
+		var len=week_range.length;
+
+		var scale=d3.scale.ordinal()
+				.domain(week_range)
+				.rangeBands([0,len]);
+
+		//设置颜色
+		var calendar_style={
+			color_range:colorbrewer.YlOrRd[5]
+		};
+		var max=d3.max(data,function(d){
+			return d.value;
+		});
+		var quantize=d3.scale.quantile().domain([0, max]).range(calendar_style.color_range);
+
+		
+		var rect_group=svg.append("g");
+		var r=rect_group.selectAll("rect")
+				.data(calendarData.date_value)
+				.enter()
+				.append("rect")
+				.attr("x",function(d,i){
+					
+					return scale(d3.time.week(d.date))*cell_size
+				})
+				.attr("y",function(d,i){
+					return y_format(d.date)*cell_size
+				})
+				.attr("width",cell_size)
+				.attr("height",cell_size)
+				.attr("stroke","#ccc")
+				.attr("fill",function(d){
+					if(d.value==-1){
+						console.log(d.value);
+						return "#eee";
+					}else{
+						console.log(d.value);
+						return quantize(d.value);
+
+					}
+				})
+
+		//添加tooltip
+		var tooltip=d3.select("body")
+			.append("div")
+			.attr("class","tooltip")
+			.style("opacity",0);
+
+		r.on("mouseover",function(d){
+			tooltip.html(d.date)
+				.style("left",(d3.event.pageX)+"px")
+				.style("top",(d3.event.pageY)+"px")
+				.style("opacity",1);
+		})
+		.on("mouseout",function(d){
+			tooltip.style("opacity",0)
+		})
+
+
+		//分割月份
+		var month_path_group=svg.append("g");
+		var month_start_day=new Date(start_date);
+		var month_end_day=new Date(end_date);
+		month_end_day.setMonth(end_date.getMonth()-1);
+
+		month_path_group.selectAll(".month")
+		    .data(function(d) { return d3.time.months(month_start_day, month_end_day); })
+		    .enter().append("path")
+		    .attr("class", "month")
+		    .attr("d", monthPath);
+		 
+		function monthPath(t0){
+		    var t1 = new Date(t0.getFullYear(), t0.getMonth()+1, 0);
+		    var d0 = +y_format(t0);
+		    var w0 = scale(d3.time.week(t0));
+		    var d1 = +y_format(t1);
+		    var w1 = scale(d3.time.week(t1));
+		    return "M" + (w0 + 1) * cell_size + "," + d0 * cell_size
+		        + "H" + w0 * cell_size + "V" + 7 * cell_size
+		        + "H" + w1 * cell_size + "V" + (d1 + 1) * cell_size
+		        + "H" + (w1 + 1) * cell_size + "V" + 0
+		        + "H" + (w0 + 1) * cell_size + "Z";
+		}
+
+		//标注月份
+
+		var month_text_format=d3.time.format('%Y-%m');
+		var month_text_group = svg.append('g');
+		month_text_group.selectAll(".month")
+		    .data(function(d) { return d3.time.months(month_start_day, month_end_day); })
+		    .enter().append("text")
+		    .attr("x", function(t0){
+		        var t1 = new Date(t0.getFullYear(), t0.getMonth()+1, 0);
+		        var w0 = scale(d3.time.week(t0));
+		        var w1 = scale(d3.time.week(t1));
+		        return (w0+w1)/2*cell_size;
+		    })
+		    .attr("y", 8*cell_size)
+		    .style("text-anchor", "middle")
+		    .style("font-size", 10)
+		    .text(function(d){
+		        return month_text_format(d);
+		    });
+	</script>
+</body>
+</html>
